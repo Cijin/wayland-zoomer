@@ -17,7 +17,9 @@ reuse it for other things along the line (maybe).
 Not as straightforward as I thought it'd be. But not too bad either. Install `wayland-protocols` and use the `wayland-scanner` to generate the code needed.
 Check the reference above for details.
 
-02. Connect wayland display
+### 02. Connect wayland display
+Not too bad, this one is quite easy. Check `src/main.c`
+
 03. Get registry
         a. Add listener to collect globals
         b. Mainly: `wl_compositor`, `xdg_wm_base, `wl_shm`.
