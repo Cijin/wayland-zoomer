@@ -13,9 +13,9 @@ reuse it for other things along the line (maybe).
 
 [Reference](https://wayland-book.com/xdg-shell-basics/example-code.html)
 
-### 01. Generate `xdg-shell-client-protocol.h`, not exactly sure how to do this yet
-    Not as straightforward as I thought it'd be. But not too bad either. Install `wayland-protocols` and use the `wayland-scanner` to generate the code needed.
-    Check the reference above for details.
+### 01. Generate `xdg-shell-client-protocol.h`
+Not as straightforward as I thought it'd be. But not too bad either. Install `wayland-protocols` and use the `wayland-scanner` to generate the code needed.
+Check the reference above for details.
 
 02. Connect wayland display
 03. Get registry
