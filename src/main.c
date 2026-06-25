@@ -10,7 +10,11 @@
 #include <time.h>
 #include <unistd.h>
 #include <wayland-client.h>
+
 #include "xdg-shell-client-protocol.h"
+#include "ext-foreign-toplevel-list-v1-protocol.h"
+#include "ext-image-capture-source-v1-protocol.h"
+#include "ext-image-copy-capture-v1-protocol.h"
 
 static void
 randname(char *buf)
@@ -59,16 +63,17 @@ allocate_shm_file(size_t size)
 }
 
 struct client_state {
-  // Global
   struct wl_display *wl_display;
   struct wl_registry *wl_registry;
   struct wl_shm *wl_shm;
   struct wl_compositor *wl_compositor;
   struct xdg_wm_base *xdg_wm_base;
-  // Objects
   struct wl_surface *wl_surface;
   struct xdg_surface *xdg_surface;
   struct xdg_toplevel *xdg_toplevel;
+  struct ext_output_image_capture_source_manager_v1 *ext_output_image_capture_source_manager;
+  struct ext_foreign_toplevel_image_capture_source_manager_v1 *ext_foreign_toplevel_image_capture_source_manager;
+  struct ext_image_copy_capture_manager_v1 *ext_image_copy_capture_manager;
 };
 
 static void
@@ -159,6 +164,15 @@ static void registry_global(void *data, struct wl_registry *wl_registry,
   } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
     state->xdg_wm_base = wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, 1); 
     xdg_wm_base_add_listener(state->xdg_wm_base, &xdg_wm_base_listener, state);
+  } else if (strcmp(interface, ext_output_image_capture_source_manager_v1_interface.name) == 0) {
+    state->ext_output_image_capture_source_manager = wl_registry_bind(wl_registry, name,
+        &ext_output_image_capture_source_manager_v1_interface, 1);
+  } else if (strcmp(interface, ext_foreign_toplevel_image_capture_source_manager_v1_interface.name) == 0) {
+    state->ext_foreign_toplevel_image_capture_source_manager = wl_registry_bind(wl_registry, name,
+        &ext_foreign_toplevel_image_capture_source_manager_v1_interface, 1);
+  } else if (strcmp(interface, ext_image_copy_capture_manager_v1_interface.name) == 0) {
+    state->ext_image_copy_capture_manager = wl_registry_bind(wl_registry, name,
+        &ext_image_copy_capture_manager_v1_interface, 1);
   }
 }
 
@@ -208,4 +222,3 @@ int main(int argc, char *argv[]) {
   wl_display_disconnect(state.wl_display);
   return 0;
 }
-
