@@ -71,6 +71,7 @@ struct client_state {
   struct wl_surface *wl_surface;
   struct xdg_surface *xdg_surface;
   struct xdg_toplevel *xdg_toplevel;
+  // thanks to source of grim: https://gitlab.freedesktop.org/emersion/grim/-/blob/master/main.c?ref_type=heads
   struct ext_output_image_capture_source_manager_v1 *ext_output_image_capture_source_manager;
   struct ext_foreign_toplevel_image_capture_source_manager_v1 *ext_foreign_toplevel_image_capture_source_manager;
   struct ext_image_copy_capture_manager_v1 *ext_image_copy_capture_manager;
