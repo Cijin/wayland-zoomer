@@ -22,5 +22,8 @@ generate:
 build:
 	gcc $(CFLAGS) -o zoomer $(PROTO_SRC) src/main.c $(LIBS)
 
+debug:
+	gcc -g -O0 $(CFLAGS) -o zoomer $(PROTO_SRC) src/main.c $(LIBS)
+
 clean:
 	rm -f zoomer *-protocol.c *-protocol.h
