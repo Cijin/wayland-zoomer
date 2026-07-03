@@ -34,6 +34,19 @@ static void registry_handle_global(void *data, struct wl_registry *wl_registry, 
   struct client_state *state = data; 
   if (strcmp(interface, wl_compositor_interface.name) == 0) {
     state->wl_compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, version);
+  } else if (strcmp(interface, wl_shm_interface.name) == 0) {
+    state->wl_shm = wl_registry_bind(wl_registry, name, &wl_shm_interface, version);
+  } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
+    state->xdg_wm_base = wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, version);
+  } else if (strcmp(interface, ext_output_image_capture_source_manager_v1_interface.name) == 0) {
+    state->ext_output_image_capture_source_manager = wl_registry_bind(wl_registry, name, 
+        &ext_output_image_capture_source_manager_v1_interface, version);
+  } else if (strcmp(interface, ext_foreign_toplevel_image_capture_source_manager_v1_interface.name) == 0) {
+    state->ext_foreign_toplevel_image_capture_source_manager = wl_registry_bind(wl_registry, name,
+        &ext_foreign_toplevel_image_capture_source_manager_v1_interface, version);
+  } else if (strcmp(interface, ext_image_copy_capture_manager_v1_interface.name) == 0) {
+    state->ext_image_copy_capture_manager = wl_registry_bind(wl_registry, name,
+        &ext_image_copy_capture_manager_v1_interface, version);
   }
 }
 
