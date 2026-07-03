@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <errno.h>
+#include <assert.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -51,7 +52,7 @@ static void registry_handle_global(void *data, struct wl_registry *wl_registry, 
 }
 
 static void registry_handle_global_remove(void *data, struct wl_registry *wl_registry, uint32_t name) {
-  // left blank for now
+  // Left blank because not sure what else to do
 }
 
 static struct wl_registry_listener wl_registry_listener = {
@@ -77,6 +78,15 @@ int main(int argc, char *argv[]) {
   state.wl_registry = wl_display_get_registry(state.wl_display);
   wl_registry_add_listener(state.wl_registry, &wl_registry_listener, &state);
   wl_display_roundtrip(state.wl_display);
+
+  assert(state.wl_compositor != NULL && "failed to bind compositor");
+  state.wl_surface = wl_compositor_create_surface(state.wl_compositor);
+
+  // Todo:
+  // Create surface
+  // Create toplevel
+  // Create shm
+  // Let wayland know about shm
 
   wl_display_disconnect(state.wl_display);
   return 0;
