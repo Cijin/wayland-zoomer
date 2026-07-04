@@ -17,6 +17,8 @@
 #include "ext-image-capture-source-v1-protocol.h"
 #include "ext-image-copy-capture-v1-protocol.h"
 
+const char *const SHM_FILENAME = "/wl_shm_zoomer";
+
 struct client_state {
   struct wl_display *wl_display;
   struct wl_registry *wl_registry;
@@ -31,6 +33,59 @@ struct client_state {
   struct ext_image_copy_capture_manager_v1 *ext_image_copy_capture_manager;
 };
 
+static int create_shm_file(void) {
+  int fd = shm_open(SHM_FILENAME, O_CREAT | O_EXCL | O_RDWR, 0600);
+  if (fd > 0) {
+    shm_unlink(SHM_FILENAME);
+    return fd;
+  }
+  return fd;
+}
+
+int allocate_shm_file(size_t size) {
+  int fd = create_shm_file();
+  assert(fd > 0 && "shm creation failed");
+
+  int ret = ftruncate(fd, size);
+  if (ret < 0) {
+    close(fd);
+    return -1;
+  }
+  return fd;
+}
+
+void draw_frame() {
+  const int height = 720, width = 480;
+  const int stride = width * 4;
+  const shm_pool_size = height * stride * 2;
+
+  int fd = allocate_shm_file(shm_pool_size);
+  assert(fd > 0 && "shm allocation failed");
+
+  // Todo: mmap memory just allocated
+}
+
+void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
+  struct client_state *state = data;
+  xdg_surface_ack_configure(xdg_surface, serial);
+  // Todo:
+  // Draw frame
+  // Attach surface
+  // Commit surface
+}
+
+struct xdg_surface_listener xdg_surface_listener = {
+  .configure = &xdg_surface_configure,
+};
+
+static void xdg_wm_base_handle_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial) {
+  xdg_wm_base_pong(xdg_wm_base, serial);
+}
+
+struct xdg_wm_base_listener xdg_wm_base_listener = {
+  .ping = &xdg_wm_base_handle_ping,
+};
+
 static void registry_handle_global(void *data, struct wl_registry *wl_registry, uint32_t name, const char *interface, uint32_t version) {
   struct client_state *state = data; 
   if (strcmp(interface, wl_compositor_interface.name) == 0) {
@@ -39,6 +94,8 @@ static void registry_handle_global(void *data, struct wl_registry *wl_registry, 
     state->wl_shm = wl_registry_bind(wl_registry, name, &wl_shm_interface, version);
   } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
     state->xdg_wm_base = wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, version);
+    int xdg_listener_status = xdg_wm_base_add_listener(state->xdg_wm_base, &xdg_wm_base_listener, NULL);
+    assert(xdg_listener_status != -1);
   } else if (strcmp(interface, ext_output_image_capture_source_manager_v1_interface.name) == 0) {
     state->ext_output_image_capture_source_manager = wl_registry_bind(wl_registry, name, 
         &ext_output_image_capture_source_manager_v1_interface, version);
@@ -58,14 +115,6 @@ static void registry_handle_global_remove(void *data, struct wl_registry *wl_reg
 static struct wl_registry_listener wl_registry_listener = {
 	.global = &registry_handle_global,
   .global_remove = &registry_handle_global_remove,
-};
-
-static void xdg_wm_base_handle_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial) {
-  xdg_wm_base_pong(xdg_wm_base, serial);
-}
-
-struct xdg_wm_base_listener xdg_wm_base_listener = {
-  .ping = &xdg_wm_base_handle_ping,
 };
 
 int main(int argc, char *argv[]) {
@@ -91,8 +140,10 @@ int main(int argc, char *argv[]) {
   state.wl_surface = wl_compositor_create_surface(state.wl_compositor);
   state.xdg_surface = xdg_wm_base_get_xdg_surface(state.xdg_wm_base, state.wl_surface);
 
-  int xdg_listener_status = xdg_wm_base_add_listener(state.xdg_wm_base, &xdg_wm_base_listener, NULL);
-  assert(xdg_listener_status != -1);
+  int xdg_surface_listener_status = xdg_surface_add_listener(state.xdg_surface, &xdg_surface_listener, &state);
+  assert(xdg_surface_listener_status != -1);
+
+  state.xdg_toplevel = xdg_surface_get_toplevel(state.xdg_surface);
 
   // Todo:
   // Create toplevel
