@@ -60,6 +60,14 @@ static struct wl_registry_listener wl_registry_listener = {
   .global_remove = &registry_handle_global_remove,
 };
 
+static void xdg_wm_base_handle_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial) {
+  xdg_wm_base_pong(xdg_wm_base, serial);
+}
+
+struct xdg_wm_base_listener xdg_wm_base_listener = {
+  .ping = &xdg_wm_base_handle_ping,
+};
+
 int main(int argc, char *argv[]) {
   struct client_state state = {0};
   const char *display = getenv("WAYLAND_DISPLAY");
@@ -81,9 +89,12 @@ int main(int argc, char *argv[]) {
 
   assert(state.wl_compositor != NULL && "failed to bind compositor");
   state.wl_surface = wl_compositor_create_surface(state.wl_compositor);
+  state.xdg_surface = xdg_wm_base_get_xdg_surface(state.xdg_wm_base, state.wl_surface);
+
+  int xdg_listener_status = xdg_wm_base_add_listener(state.xdg_wm_base, &xdg_wm_base_listener, NULL);
+  assert(xdg_listener_status != -1);
 
   // Todo:
-  // Create surface
   // Create toplevel
   // Create shm
   // Let wayland know about shm
