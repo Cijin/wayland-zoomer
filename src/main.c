@@ -26,11 +26,13 @@ struct client_state {
   struct wl_compositor *wl_compositor;
   struct xdg_wm_base *xdg_wm_base;
   struct wl_surface *wl_surface;
+  struct wl_output *wl_output;
   struct xdg_surface *xdg_surface;
   struct xdg_toplevel *xdg_toplevel;
-  struct ext_output_image_capture_source_manager_v1 *ext_output_image_capture_source_manager;
-  struct ext_foreign_toplevel_image_capture_source_manager_v1 *ext_foreign_toplevel_image_capture_source_manager;
-  struct ext_image_copy_capture_manager_v1 *ext_image_copy_capture_manager;
+  struct ext_output_image_capture_source_manager_v1 *ext_output_image_capture_source_manager_v1;
+  struct ext_image_capture_source_v1 *ext_image_capture_source_v1;
+  struct ext_foreign_toplevel_image_capture_source_manager_v1 *ext_foreign_toplevel_image_capture_source_manager_v1;
+  struct ext_image_copy_capture_manager_v1 *ext_image_copy_capture_manager_v1;
 };
 
 static int create_shm_file(void) {
@@ -122,6 +124,7 @@ struct xdg_wm_base_listener xdg_wm_base_listener = {
 
 static void registry_handle_global(void *data, struct wl_registry *wl_registry, uint32_t name, const char *interface, uint32_t version) {
   struct client_state *state = data; 
+  printf("%s\n", interface);
   if (strcmp(interface, wl_compositor_interface.name) == 0) {
     state->wl_compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, version);
   } else if (strcmp(interface, wl_shm_interface.name) == 0) {
@@ -131,19 +134,21 @@ static void registry_handle_global(void *data, struct wl_registry *wl_registry, 
     int xdg_listener_status = xdg_wm_base_add_listener(state->xdg_wm_base, &xdg_wm_base_listener, NULL);
     assert(xdg_listener_status != -1);
   } else if (strcmp(interface, ext_output_image_capture_source_manager_v1_interface.name) == 0) {
-    state->ext_output_image_capture_source_manager = wl_registry_bind(wl_registry, name, 
+    state->ext_output_image_capture_source_manager_v1 = wl_registry_bind(wl_registry, name, 
         &ext_output_image_capture_source_manager_v1_interface, version);
   } else if (strcmp(interface, ext_foreign_toplevel_image_capture_source_manager_v1_interface.name) == 0) {
-    state->ext_foreign_toplevel_image_capture_source_manager = wl_registry_bind(wl_registry, name,
+    state->ext_foreign_toplevel_image_capture_source_manager_v1 = wl_registry_bind(wl_registry, name,
         &ext_foreign_toplevel_image_capture_source_manager_v1_interface, version);
   } else if (strcmp(interface, ext_image_copy_capture_manager_v1_interface.name) == 0) {
-    state->ext_image_copy_capture_manager = wl_registry_bind(wl_registry, name,
+    state->ext_image_copy_capture_manager_v1 = wl_registry_bind(wl_registry, name,
         &ext_image_copy_capture_manager_v1_interface, version);
+  } else if (strcmp(interface, wl_output_interface.name) == 0) {
+    state->wl_output = wl_registry_bind(wl_registry, name, &wl_output_interface, version);
   }
 }
 
 static void registry_handle_global_remove(void *data, struct wl_registry *wl_registry, uint32_t name) {
-  // Left blank because not sure what else to do
+  // No-op
 }
 
 static struct wl_registry_listener wl_registry_listener = {
@@ -179,12 +184,26 @@ int main(int argc, char *argv[]) {
 
   state.xdg_toplevel = xdg_surface_get_toplevel(state.xdg_surface);
   xdg_toplevel_set_title(state.xdg_toplevel, "Zoomer Client");
+
+  state.ext_image_capture_source_v1 = ext_output_image_capture_source_manager_v1_create_source(
+      state.ext_output_image_capture_source_manager_v1, state.wl_output);
+
   wl_surface_commit(state.wl_surface);
 
+  // https://wayland.app/protocols/ext-image-capture-source-v1
+  // https://wayland.app/protocols/ext-image-copy-capture-v1
+  // Creating a source needs to need a `wl_output`
+  // https://wayland.app/protocols/wayland#wl_output
+
   while (wl_display_dispatch(state.wl_display)) {
-    /* This space deliberately left blank */
+    // No-op
   }
 
+  // Todo: 
+  // might need to cleanup some of the ext stuff too
+  ext_image_capture_source_v1_destroy(state.ext_image_capture_source_v1);
+  ext_output_image_capture_source_manager_v1_destroy(state.ext_output_image_capture_source_manager_v1);
+  wl_output_release(state.wl_output);
   wl_display_disconnect(state.wl_display);
   return 0;
 }
