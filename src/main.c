@@ -71,9 +71,8 @@ static const struct wl_buffer_listener wl_buffer_listener = {
 };
 
 static struct wl_buffer *draw_frame(struct client_state *state) {
-  const int height = 720, width = 480;
-  const int stride = width * 4;
-  const int shm_pool_size = height * stride * 2;
+  const int stride = state->buffer_width * 4;
+  const int shm_pool_size = state->buffer_height * stride * 2;
 
   int fd = allocate_shm_file(shm_pool_size);
   assert(fd > 0 && "shm allocation failed");
@@ -85,20 +84,14 @@ static struct wl_buffer *draw_frame(struct client_state *state) {
   }
 
   struct wl_shm_pool *pool = wl_shm_create_pool(state->wl_shm, fd, shm_pool_size);
+
+  assert(state->has_shm_format && "shm_format is not set");
   struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0,
-      width, height, stride, WL_SHM_FORMAT_XRGB8888);
+      state->buffer_width, state->buffer_height, stride, state->shm_format);
   wl_shm_pool_destroy(pool);
   close(fd);
 
-  /* Draw checkerboxed background */
-  for (int y = 0; y < height; ++y) {
-    for (int x = 0; x < width; ++x) {
-      if ((x + y / 8 * 8) % 16 < 8)
-        data[y * width + x] = 0xFF666666;
-      else
-        data[y * width + x] = 0xFFEEEEEE;
-    }
-  }
+  // Todo: what next?
 
   munmap(data, shm_pool_size);
   wl_buffer_add_listener(buffer, &wl_buffer_listener, NULL);
