@@ -70,7 +70,7 @@ static const struct wl_buffer_listener wl_buffer_listener = {
     .release = wl_buffer_release,
 };
 
-static struct wl_buffer *draw_frame(struct client_state *state) {
+static struct wl_buffer *create_frame_buffer(struct client_state *state) {
   const int stride = state->buffer_width * 4;
   const int shm_pool_size = state->buffer_height * stride * 2;
 
@@ -91,8 +91,6 @@ static struct wl_buffer *draw_frame(struct client_state *state) {
   wl_shm_pool_destroy(pool);
   close(fd);
 
-  // Todo: what next?
-
   munmap(data, shm_pool_size);
   wl_buffer_add_listener(buffer, &wl_buffer_listener, NULL);
   return buffer;
@@ -102,7 +100,7 @@ void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t
   struct client_state *state = data;
   xdg_surface_ack_configure(xdg_surface, serial);
 
-  struct wl_buffer *buffer = draw_frame(state);
+  struct wl_buffer *buffer = create_frame_buffer(state);
   wl_surface_attach(state->wl_surface, buffer, 0, 0);
   wl_surface_commit(state->wl_surface);
 }
