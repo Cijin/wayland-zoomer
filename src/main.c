@@ -31,8 +31,13 @@ struct client_state {
   struct xdg_toplevel *xdg_toplevel;
   struct ext_output_image_capture_source_manager_v1 *ext_output_image_capture_source_manager_v1;
   struct ext_image_capture_source_v1 *ext_image_capture_source_v1;
+  struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1;
   struct ext_foreign_toplevel_image_capture_source_manager_v1 *ext_foreign_toplevel_image_capture_source_manager_v1;
   struct ext_image_copy_capture_manager_v1 *ext_image_copy_capture_manager_v1;
+  uint32_t buffer_width;
+  uint32_t buffer_height;
+  uint32_t shm_format;
+  bool has_shm_format;
 };
 
 static int create_shm_file(void) {
@@ -56,10 +61,9 @@ int allocate_shm_file(size_t size) {
   return fd;
 }
 
-static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
-{
-    /* Sent by the compositor when it's no longer using this buffer */
-    wl_buffer_destroy(wl_buffer);
+static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer) {
+  /* Sent by the compositor when it's no longer using this buffer */
+  wl_buffer_destroy(wl_buffer);
 }
 
 static const struct wl_buffer_listener wl_buffer_listener = {
@@ -156,6 +160,61 @@ static struct wl_registry_listener wl_registry_listener = {
   .global_remove = &registry_handle_global_remove,
 };
 
+void handle_session_buffer_size (
+    void *data, struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1,
+    uint32_t width, uint32_t height) {
+  struct client_state *state = data;
+  state->buffer_width = width;
+  state->buffer_height = height;
+}
+
+void handle_session_shm_format(
+    void *data, struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1,
+    uint32_t format) {
+  struct client_state *state = data;
+  if (state->has_shm_format) {
+    return;
+  }
+
+  // Note: not exactly sure how format translates to this enum value
+  if (format == WL_SHM_FORMAT_XBGR8888) {
+    state->shm_format = format;
+    state->has_shm_format = true;
+  }
+}
+
+void handle_dmabuf_device(void *data,
+    struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1,
+    struct wl_array *device) {
+  // No-op
+}
+
+void handle_dmabuf_format(void *data,
+  struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1,
+  uint32_t format,
+  struct wl_array *modifiers) {
+  // No-op
+}
+
+void handle_done(void *data,
+    struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1) {
+  // No-op
+}
+
+void handle_stopped(void *data,
+    struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1) {
+  // No-op
+}
+
+struct ext_image_copy_capture_session_v1_listener ext_image_copy_capture_session_v1_listener = {
+  .buffer_size = &handle_session_buffer_size,
+  .shm_format = &handle_session_shm_format,
+	.dmabuf_device = &handle_dmabuf_device,
+	.dmabuf_format = &handle_dmabuf_format,
+	.done = &handle_done,
+	.stopped = &handle_stopped,
+};
+
 int main(int argc, char *argv[]) {
   struct client_state state = {0};
   const char *display = getenv("WAYLAND_DISPLAY");
@@ -187,6 +246,12 @@ int main(int argc, char *argv[]) {
 
   state.ext_image_capture_source_v1 = ext_output_image_capture_source_manager_v1_create_source(
       state.ext_output_image_capture_source_manager_v1, state.wl_output);
+  state.ext_image_copy_capture_session_v1 = ext_image_copy_capture_manager_v1_create_session(
+      state.ext_image_copy_capture_manager_v1, state.ext_image_capture_source_v1, 0);
+  ext_image_copy_capture_session_v1_add_listener(state.ext_image_copy_capture_session_v1,
+					       &ext_image_copy_capture_session_v1_listener, &state);
+  wl_display_roundtrip(state.wl_display);
+
 
   wl_surface_commit(state.wl_surface);
 
