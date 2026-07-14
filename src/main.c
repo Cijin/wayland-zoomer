@@ -23,6 +23,7 @@ struct client_state {
   struct wl_display *wl_display;
   struct wl_registry *wl_registry;
   struct wl_shm *wl_shm;
+  struct wl_buffer *wl_buffer;
   struct wl_compositor *wl_compositor;
   struct xdg_wm_base *xdg_wm_base;
   struct wl_surface *wl_surface;
@@ -32,8 +33,8 @@ struct client_state {
   struct ext_output_image_capture_source_manager_v1 *ext_output_image_capture_source_manager_v1;
   struct ext_image_capture_source_v1 *ext_image_capture_source_v1;
   struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1;
-  struct ext_foreign_toplevel_image_capture_source_manager_v1 *ext_foreign_toplevel_image_capture_source_manager_v1;
   struct ext_image_copy_capture_manager_v1 *ext_image_copy_capture_manager_v1;
+  struct ext_image_copy_capture_frame_v1 *ext_image_copy_capture_frame_v1;
   uint32_t buffer_width;
   uint32_t buffer_height;
   uint32_t shm_format;
@@ -97,12 +98,8 @@ static struct wl_buffer *create_frame_buffer(struct client_state *state) {
 }
 
 void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
-  struct client_state *state = data;
   xdg_surface_ack_configure(xdg_surface, serial);
-
-  struct wl_buffer *buffer = create_frame_buffer(state);
-  wl_surface_attach(state->wl_surface, buffer, 0, 0);
-  wl_surface_commit(state->wl_surface);
+  // Note: buffer creation/commit will be handled by ext_image_source_capture
 }
 
 struct xdg_surface_listener xdg_surface_listener = {
@@ -131,9 +128,6 @@ static void registry_handle_global(void *data, struct wl_registry *wl_registry, 
   } else if (strcmp(interface, ext_output_image_capture_source_manager_v1_interface.name) == 0) {
     state->ext_output_image_capture_source_manager_v1 = wl_registry_bind(wl_registry, name, 
         &ext_output_image_capture_source_manager_v1_interface, version);
-  } else if (strcmp(interface, ext_foreign_toplevel_image_capture_source_manager_v1_interface.name) == 0) {
-    state->ext_foreign_toplevel_image_capture_source_manager_v1 = wl_registry_bind(wl_registry, name,
-        &ext_foreign_toplevel_image_capture_source_manager_v1_interface, version);
   } else if (strcmp(interface, ext_image_copy_capture_manager_v1_interface.name) == 0) {
     state->ext_image_copy_capture_manager_v1 = wl_registry_bind(wl_registry, name,
         &ext_image_copy_capture_manager_v1_interface, version);
@@ -147,8 +141,50 @@ static void registry_handle_global_remove(void *data, struct wl_registry *wl_reg
 }
 
 static struct wl_registry_listener wl_registry_listener = {
-	.global = &registry_handle_global,
+  .global = &registry_handle_global,
   .global_remove = &registry_handle_global_remove,
+};
+
+void handle_frame_transform(void *data,
+    struct ext_image_copy_capture_frame_v1 *ext_image_copy_capture_frame_v1,
+    uint32_t transform) {
+  // No-op
+}
+
+void handle_frame_damage(void *data,
+    struct ext_image_copy_capture_frame_v1 *ext_image_copy_capture_frame_v1,
+    int32_t x,
+    int32_t y,
+    int32_t width,
+    int32_t height) {
+  // No-op
+}
+
+void handle_frame_presentation_time(void *data,
+    struct ext_image_copy_capture_frame_v1 *ext_image_copy_capture_frame_v1,
+    uint32_t tv_sec_hi,
+    uint32_t tv_sec_lo,
+    uint32_t tv_nsec) {
+  // No-op
+}
+
+void handle_frame_ready(void *data,
+    struct ext_image_copy_capture_frame_v1 *ext_image_copy_capture_frame_v1) {
+  // No-op
+}
+
+void handle_frame_failed(void *data,
+    struct ext_image_copy_capture_frame_v1 *ext_image_copy_capture_frame_v1,
+    uint32_t reason) {
+  assert(false && "copy capture frame failed");
+}
+
+static struct ext_image_copy_capture_frame_v1_listener ext_image_copy_capture_frame_listener = {
+  .transform = &handle_frame_transform,
+  .damage = &handle_frame_damage,
+  .presentation_time = &handle_frame_presentation_time,
+  .ready = &handle_frame_ready,
+  .failed = &handle_frame_failed,
 };
 
 void handle_session_buffer_size (
@@ -181,14 +217,9 @@ void handle_dmabuf_device(void *data,
 }
 
 void handle_dmabuf_format(void *data,
-  struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1,
-  uint32_t format,
-  struct wl_array *modifiers) {
-  // No-op
-}
-
-void handle_done(void *data,
-    struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1) {
+    struct ext_image_copy_capture_session_v1 *ext_image_copy_capture_session_v1,
+    uint32_t format,
+    struct wl_array *modifiers) {
   // No-op
 }
 
@@ -197,13 +228,36 @@ void handle_stopped(void *data,
   // No-op
 }
 
+void handle_done(void *data,
+    struct ext_image_copy_capture_session_v1 *session) {
+  struct client_state *state = data;
+
+  if (state->ext_image_copy_capture_frame_v1 != NULL) {
+    return;
+  }
+
+  assert(state->has_shm_format && "supported shm format not found");
+
+  state->wl_buffer = create_frame_buffer(state);
+  assert(state->wl_buffer != NULL && "failed to create buffer");
+
+  state->ext_image_copy_capture_frame_v1 = ext_image_copy_capture_session_v1_create_frame(session);
+  // Todo: handle return status
+  ext_image_copy_capture_frame_v1_add_listener(
+      state->ext_image_copy_capture_frame_v1, &ext_image_copy_capture_frame_listener, state);
+
+  ext_image_copy_capture_frame_v1_attach_buffer(state->ext_image_copy_capture_frame_v1, state->wl_buffer);
+  ext_image_copy_capture_frame_v1_damage_buffer(state->ext_image_copy_capture_frame_v1, 0, 0, state->buffer_width, state->buffer_height);
+  ext_image_copy_capture_frame_v1_capture(state->ext_image_copy_capture_frame_v1);
+}
+
 struct ext_image_copy_capture_session_v1_listener ext_image_copy_capture_session_v1_listener = {
   .buffer_size = &handle_session_buffer_size,
   .shm_format = &handle_session_shm_format,
-	.dmabuf_device = &handle_dmabuf_device,
-	.dmabuf_format = &handle_dmabuf_format,
-	.done = &handle_done,
-	.stopped = &handle_stopped,
+  .dmabuf_device = &handle_dmabuf_device,
+  .dmabuf_format = &handle_dmabuf_format,
+  .done = &handle_done,
+  .stopped = &handle_stopped,
 };
 
 int main(int argc, char *argv[]) {
@@ -239,8 +293,10 @@ int main(int argc, char *argv[]) {
       state.ext_output_image_capture_source_manager_v1, state.wl_output);
   state.ext_image_copy_capture_session_v1 = ext_image_copy_capture_manager_v1_create_session(
       state.ext_image_copy_capture_manager_v1, state.ext_image_capture_source_v1, 0);
+  //state.ext_image_copy_capture_frame_v1 = ext_image_copy_capture_session_v1_create_frame(
+  //    state.ext_image_copy_capture_session_v1);
   ext_image_copy_capture_session_v1_add_listener(state.ext_image_copy_capture_session_v1,
-					       &ext_image_copy_capture_session_v1_listener, &state);
+      &ext_image_copy_capture_session_v1_listener, &state);
   wl_display_roundtrip(state.wl_display);
 
 
