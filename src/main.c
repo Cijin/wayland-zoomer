@@ -99,7 +99,8 @@ static struct wl_buffer *create_frame_buffer(struct client_state *state) {
 
 void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
   xdg_surface_ack_configure(xdg_surface, serial);
-  // Note: buffer creation/commit will be handled by ext_image_source_capture
+
+  // Note: buffer creation/commit will be handled during ext_image_source_capture
 }
 
 struct xdg_surface_listener xdg_surface_listener = {
@@ -170,7 +171,10 @@ void handle_frame_presentation_time(void *data,
 
 void handle_frame_ready(void *data,
     struct ext_image_copy_capture_frame_v1 *ext_image_copy_capture_frame_v1) {
-  // No-op
+  struct client_state *state = data;
+  wl_surface_attach(state->wl_surface, state->wl_buffer, 0, 0);
+  wl_surface_commit(state->wl_surface);
+
 }
 
 void handle_frame_failed(void *data,
@@ -288,19 +292,15 @@ int main(int argc, char *argv[]) {
 
   state.xdg_toplevel = xdg_surface_get_toplevel(state.xdg_surface);
   xdg_toplevel_set_title(state.xdg_toplevel, "Zoomer Client");
+  wl_surface_commit(state.wl_surface);
 
   state.ext_image_capture_source_v1 = ext_output_image_capture_source_manager_v1_create_source(
       state.ext_output_image_capture_source_manager_v1, state.wl_output);
   state.ext_image_copy_capture_session_v1 = ext_image_copy_capture_manager_v1_create_session(
       state.ext_image_copy_capture_manager_v1, state.ext_image_capture_source_v1, 0);
-  //state.ext_image_copy_capture_frame_v1 = ext_image_copy_capture_session_v1_create_frame(
-  //    state.ext_image_copy_capture_session_v1);
   ext_image_copy_capture_session_v1_add_listener(state.ext_image_copy_capture_session_v1,
       &ext_image_copy_capture_session_v1_listener, &state);
   wl_display_roundtrip(state.wl_display);
-
-
-  wl_surface_commit(state.wl_surface);
 
   // https://wayland.app/protocols/ext-image-capture-source-v1
   // https://wayland.app/protocols/ext-image-copy-capture-v1
